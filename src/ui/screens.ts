@@ -4,22 +4,58 @@ import { dateLong, dateShort } from '../core/calendar';
 import { ownedPlanets, realFactions } from '../core/rules';
 import type { GameSettings, SpeciesId } from '../core/types';
 import { score } from '../core/victory';
-import type { App } from './app';
+import type { App, ScreenId } from './app';
 import { artUrl, leaderPortrait } from './art';
 import { renderDiplomacy, renderForum } from './diplomacyScreen';
 import { button, clear, h, img, keyHint, type Child } from './dom';
 import { HELP, focusIndex, makeFocusable, restoreFocus } from './keys';
+import { backButton, closeButton } from './widgets';
+import { CAPTAINS, leadership, slotOf } from './captains';
 import { renderEncyclopedia } from './encyclopedia';
 import { AUTOSAVE, SLOTS, deleteSave, exportGame, importGame, loadGame, saveGame, saveInfo } from './save';
 import { renderTech } from './techScreen';
 import { renderBudget, renderPlanets, renderUnits } from './listsScreen';
 
-export function frame(app: App, title: string, body: Child, opts: { wide?: boolean; noClose?: boolean } = {}): HTMLElement {
+// The head of a screen: a Back button at the left when the screen has a place to go back to, the title, and the
+// Close button at the right. Esc closes.
+export function frame(app: App, title: string, body: Child, opts: { wide?: boolean; noClose?: boolean; back?: () => void } = {}): HTMLElement {
   return h(
     'div.screen',
     { class: opts.wide ? 'wide' : '' },
-    h('div.screenhead', null, h('div.head', null, title), opts.noClose ? null : button('Close', () => app.close(), { key: 'Esc' })),
+    h('div.screenhead', null, opts.back ? backButton(opts.back) : null, h('div.head.grow', null, title), opts.noClose ? null : closeButton(() => app.close(), 'Close (Esc)')),
     h('div.screenbody', null, body),
+  );
+}
+
+// The Species screen has three tabs: Diplomacy, Forum and Power. Each tab is its own screen id, so the keys G and O
+// and the links of the game keep working.
+export function speciesTabs(app: App, current: ScreenId): HTMLElement {
+  const tab = (id: ScreenId, label: string, key: string) => button(label, () => app.open(id), { cls: current === id ? 'tab selected' : 'tab', title: `Key: ${key}` });
+  return h('div.row.tabs', null, tab('diplomacy', 'Diplomacy', 'G'), tab('forum', 'Forum', 'O'), tab('power', 'Power', 'V'));
+}
+
+// The Power tab: the score graph and the score table, at any point of the game.
+function powerScreen(app: App): HTMLElement {
+  const s = app.s;
+  const rows = realFactions(s)
+    .filter((f) => f.id === app.me || app.faction.met.includes(f.id))
+    .map((f) => ({ f, score: score(s, f.id) }))
+    .sort((a, b) => b.score - a.score)
+    .map(({ f, score: sc }) =>
+      h('tr', null, h('td', null, img(leaderPortrait(f.species), 32, 'portrait')), h('td', { style: { color: f.color } }, f.name, f.id === app.me ? ' (you)' : ''), h('td', null, f.alive ? plural(ownedPlanets(s, f.id).length, 'planet') : 'Eliminated'), h('td', null, plural(f.techs.length, 'technology', 'technologies')), h('td', null, `${sc} points`)),
+    );
+  const unknown = realFactions(s).length - 1 - app.faction.met.length;
+  return frame(
+    app,
+    'Species',
+    [
+      speciesTabs(app, 'power'),
+      h('div.dim', null, 'Points count technologies, planets, population and buildings. They rank the factions and have no other effect.', unknown > 0 ? ` ${plural(unknown, 'faction')} not yet met ${unknown === 1 ? 'is' : 'are'} not shown.` : ''),
+      h('table.scores', null, rows),
+      h('div.section', null, 'Power over time'),
+      scoreChart(app),
+    ],
+    { wide: true },
   );
 }
 
@@ -51,6 +87,9 @@ export function renderScreen(app: App) {
       break;
     case 'forum':
       root.appendChild(renderForum(app));
+      break;
+    case 'power':
+      root.appendChild(powerScreen(app));
       break;
     case 'encyclopedia':
       root.appendChild(renderEncyclopedia(app));
@@ -104,34 +143,18 @@ function menu(app: App): HTMLElement {
       null,
       app.hasGame ? button('Return to the game', () => app.close(), { cls: 'big', key: 'r' }) : null,
       !app.hasGame && auto
-        ? button(`Continue (${dateShort(auto.turn)}, ${auto.faction})`, () => {
+        ? button(h('span.nowrap', null, 'Continue ', h('span.dim', null, `${dateShort(auto.turn)}, ${auto.faction}`)), () => {
             const s = loadGame(AUTOSAVE);
             if (s) app.start(s);
           }, { cls: 'big', key: 'c' })
         : null,
-      app.hasGame && app.mobile
-        ? h(
-            'div.menugrid',
-            null,
-            button('Units', () => app.open('units')),
-            button('Planets', () => app.open('planets')),
-            button('Research', () => app.open('tech')),
-            button('Diplomacy', () => app.open('diplomacy')),
-            button('Forum', () => app.open('forum')),
-            button('Budget', () => app.open('budget')),
-            button('Log', () => app.open('log')),
-          )
-        : null,
       button('New game', () => app.open('newgame'), { cls: 'big', key: 'n' }),
       button('Save and load', () => app.open('saves'), { cls: 'big', key: 's' }),
-      button('Encyclopedia', () => app.open('encyclopedia'), { cls: 'big', key: 'e' }),
-      app.mobile ? null : button('Keyboard shortcuts', () => app.open('help'), { cls: 'big', key: '?' }),
       app.mobile && !app.hasGame && /iPhone|iPad/.test(navigator.userAgent) && !window.matchMedia('(display-mode: standalone)').matches
         ? h('div.dim', null, 'For a full screen on iPhone: share, then Add to Home Screen, and open the game from there.')
         : null,
+      button('About', () => app.open('about'), { cls: 'big', key: 'a' }),
     ),
-    h('div.dim', null, 'Your game is saved in this browser at the end of each shift.'),
-    h('a.link.about', { onclick: () => app.open('about') }, 'About: how this game was made'),
   );
 }
 
@@ -175,7 +198,8 @@ function newGameScreen(app: App): HTMLElement {
   setup.opponents = Math.min(setup.opponents, size.maxOpponents);
   const cards = PLAYABLE.map((id) => {
     const sp = SPECIES[id];
-    const open = expanded.has(id);
+    // A phone opens the traits on the card. A desktop shows them below the grid for the chosen species.
+    const open = app.mobile && expanded.has(id);
     return h(
       'div.species',
       {
@@ -186,13 +210,19 @@ function newGameScreen(app: App): HTMLElement {
           scrollToSettings = true;
           app.refresh();
         },
+        // The arrow keys choose a species as the focus reaches its card, as in the encyclopedia. Only a keyboard focus counts.
+        onfocus: (e: Event) => {
+          if (!(e.target as HTMLElement).matches(':focus-visible') || setup.playerSpecies === id) return;
+          setup.playerSpecies = id as SpeciesId;
+          app.refresh();
+        },
       },
       h(
         'div.row',
         null,
-        img(leaderPortrait(id), 48, 'portrait'),
-        h('div.grow', null, h('div.head', { style: { color: sp.color } }, sp.name), h('div', null, sp.archetype, h('span.dim', null, ` · ${sp.leader}`))),
-        button(open ? 'Less' : 'More', () => (open ? expanded.delete(id) : expanded.add(id), app.refresh()), { cls: 'small', title: 'The traits of the species' }),
+        img(leaderPortrait(id), app.mobile ? 48 : 64, 'portrait'),
+        h('div.grow', null, h('div.head', { style: { color: sp.color } }, sp.name), h('div', null, sp.archetype, app.mobile ? h('span.dim', null, ` · ${sp.leader}`) : null)),
+        app.mobile ? button(open ? 'Less' : 'More', () => (open ? expanded.delete(id) : expanded.add(id), app.refresh()), { cls: 'small', title: 'The traits of the species' }) : null,
       ),
       open
         ? [
@@ -218,6 +248,22 @@ function newGameScreen(app: App): HTMLElement {
   const opponents: [string, string][] = [];
   for (let n = 1; n <= size.maxOpponents; n++) opponents.push([String(n), String(n)]);
   const chosen = SPECIES[setup.playerSpecies];
+  // The chosen species in full, below the grid, on a desktop.
+  const detail = app.mobile
+    ? null
+    : h(
+        'div.speciesdetail',
+        { style: { borderColor: chosen.color } },
+        img(leaderPortrait(setup.playerSpecies), 96, 'portrait'),
+        h(
+          'div.grow',
+          null,
+          h('div.head', { style: { color: chosen.color } }, chosen.name, h('span.dim', null, ` · ${chosen.archetype} · ${chosen.leader}`)),
+          h('div.text', null, chosen.text),
+          h('ul', null, chosen.traitText.map((t) => h('li', { class: isPenalty(t) ? 'bad' : '' }, t))),
+          h('a.link', { onclick: () => app.open('encyclopedia', `species:${setup.playerSpecies}`) }, 'Lore, units and technologies'),
+        ),
+      );
   const settings = h(
     'div.settings',
     null,
@@ -234,7 +280,7 @@ function newGameScreen(app: App): HTMLElement {
       select('Difficulty', String(setup.difficulty), DIFFICULTIES.map((d, i) => [String(i), d.name] as [string, string]), (v) => (setup.difficulty = Number(v))),
       h('label.field', null, h('span', null, 'Map seed'), seed),
     ),
-    h('div.dim', null, DIFFICULTIES[setup.difficulty].text),
+    h('div.dim', null, `${DIFFICULTIES[setup.difficulty].name}: ${DIFFICULTIES[setup.difficulty].text}`),
     h(
       'div.row',
       null,
@@ -247,9 +293,9 @@ function newGameScreen(app: App): HTMLElement {
   );
   if (scrollToSettings) {
     scrollToSettings = false;
-    requestAnimationFrame(() => settings.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    requestAnimationFrame(() => (detail ?? settings).scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }
-  return frame(app, 'New game', [h('div.section', null, 'Your species'), h('div.speciesgrid', null, cards), settings], { wide: true });
+  return frame(app, 'New game', [h('div.section', null, 'Your species'), h('div.speciesgrid', null, cards), detail, settings], { wide: true });
 }
 
 function saves(app: App): HTMLElement {
@@ -290,12 +336,16 @@ function saves(app: App): HTMLElement {
     if (s) app.start(s);
     else alert('The file is not a save file of this game version.');
   });
-  return frame(app, 'Save and load', [
-    h('div.list', null, rows),
-    h('div.section', null, 'Save files'),
-    h('div.row', null, app.hasGame ? button('Export the game to a file', () => exportGame(app.s), { key: 'x' }) : null, button('Import a game from a file', () => file.click(), { key: 'i' }), file),
-    h('div.row', null, button('Back to the menu', () => app.open('menu'), { key: 'b' })),
-  ]);
+  return frame(
+    app,
+    'Save and load',
+    [
+      h('div.list', null, rows),
+      h('div.section', null, 'Save files'),
+      h('div.row', null, app.hasGame ? button('Export the game to a file', () => exportGame(app.s), { key: 'x' }) : null, button('Import a game from a file', () => file.click(), { key: 'i' }), file),
+    ],
+    { back: () => app.open('menu') },
+  );
 }
 
 function logScreen(app: App): HTMLElement {
@@ -363,20 +413,146 @@ function endScreen(app: App): HTMLElement {
     head = won ? 'Victory' : 'Defeat';
     text = won ? END_TEXT[w.kind].win : `The ${f.name} ${END_TEXT[w.kind].lose}`;
   }
-  const rows = realFactions(s)
+  const scored = realFactions(s)
     .map((f) => ({ f, score: score(s, f.id) }))
-    .sort((a, b) => b.score - a.score)
-    .map(({ f, score: sc }) =>
-      h('tr', null, h('td', null, img(leaderPortrait(f.species), 32, 'portrait')), h('td', { style: { color: f.color } }, f.name, f.id === app.me ? ' (you)' : ''), h('td', null, f.alive ? plural(ownedPlanets(s, f.id).length, 'planet') : 'Eliminated'), h('td', null, plural(f.techs.length, 'technology', 'technologies')), h('td', null, `${sc} points`)),
-    );
+    .sort((a, b) => b.score - a.score);
+  const mine = scored.find((x) => x.f.id === app.me)!;
+  const share = leadership(won, !app.faction.alive, w?.turn ?? s.turn, mine.score, scored[0].score);
   return frame(
     app,
     `${head} in ${dateLong(w?.turn ?? s.turn)}`,
-    [
+    h(
+      'div.endscreen',
+      null,
       h(`div.endtext.${won ? 'good' : 'bad'}`, null, w ? `${{ conquest: 'Conquest', science: 'Science', forum: 'Forum' }[w.kind]} victory. ` : '', text),
-      h('table.scores', null, rows),
+      scoreChart(app, true),
+      hallOfCaptains(app, share),
       h('div.row', null, button('Look at the map', () => app.close(), { key: 'l' }), button('New game', () => app.open('newgame'), { cls: 'big', key: 'n' }), button('Menu', () => app.open('menu'), { key: 'm' })),
-    ],
-    { noClose: true },
+    ),
+    { noClose: true, wide: true },
   );
+}
+
+// A line for each faction that the player has met: its score at the end of each shift. With "ends", each line ends
+// in the leader portrait and the numbers of the faction, so no table is needed.
+export function scoreChart(app: App, ends = false): HTMLElement {
+  const s = app.s;
+  const factions = realFactions(s).filter((f) => f.id === app.me || app.faction.met.includes(f.id) || !!s.winner);
+  const rows = s.scores;
+  const c = document.createElement('canvas');
+  c.className = 'scorechart';
+  const box = h('div.chartbox', null, c);
+  const labels = factions.map((f) =>
+    h(
+      'div.chartend',
+      { style: { color: f.color } },
+      img(leaderPortrait(f.species), 28, 'portrait'),
+      h('div', null, h('div.name', null, f.name, f.id === app.me ? ' (you)' : ''), h('div.dim', null, `${score(s, f.id)} points · ${f.alive ? plural(ownedPlanets(s, f.id).length, 'planet') : 'eliminated'} · ${plural(f.techs.length, 'tech')}`)),
+    ),
+  );
+  if (ends) for (const l of labels) box.appendChild(l);
+  const draw = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(300, c.clientWidth || 800);
+    const height = c.clientHeight || 240;
+    c.width = width * dpr;
+    c.height = height * dpr;
+    const ctx = c.getContext('2d')!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#101116';
+    ctx.fillRect(0, 0, width, height);
+    const left = 44;
+    const bottom = height - 24;
+    const top = 12;
+    const right = width - (ends ? 250 : 12);
+    const turns = rows.length;
+    const max = Math.max(10, ...rows.flat());
+    ctx.strokeStyle = '#2c2a2a';
+    ctx.lineWidth = 1;
+    ctx.font = '12px "Zilla Slab", Georgia, serif';
+    ctx.fillStyle = '#8f897c';
+    ctx.textAlign = 'right';
+    for (let k = 0; k <= 4; k++) {
+      const y = bottom - ((bottom - top) * k) / 4;
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+      ctx.stroke();
+      ctx.fillText(String(Math.round((max * k) / 4)), left - 6, y + 4);
+    }
+    ctx.textAlign = 'center';
+    for (let turn = 25; turn <= turns; turn += 25) {
+      const x = left + ((right - left) * (turn - 1)) / Math.max(1, turns - 1);
+      ctx.fillText(String(turn), x, height - 8);
+    }
+    ctx.fillText('shift', right - 14, height - 8);
+    ctx.lineWidth = 2.5;
+    const endY: number[] = [];
+    factions.forEach((f) => {
+      const i = realFactions(s).indexOf(f);
+      ctx.strokeStyle = f.color;
+      ctx.globalAlpha = f.id === app.me ? 1 : 0.85;
+      ctx.beginPath();
+      let last = bottom;
+      rows.forEach((row, t) => {
+        const x = left + ((right - left) * t) / Math.max(1, turns - 1);
+        const y = bottom - ((bottom - top) * (row[i] ?? 0)) / max;
+        last = y;
+        if (t) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      });
+      ctx.stroke();
+      endY.push(last);
+    });
+    ctx.globalAlpha = 1;
+    if (!ends) return;
+    // The labels at the line ends, pushed apart when two lines end close together.
+    const order = labels.map((l, i) => ({ l, y: endY[i] })).sort((a, b) => a.y - b.y);
+    const gap = 36;
+    for (let k = 1; k < order.length; k++) order[k].y = Math.max(order[k].y, order[k - 1].y + gap);
+    for (let k = order.length - 2; k >= 0; k--) order[k].y = Math.min(order[k].y, order[k + 1].y - gap);
+    for (const { l, y } of order) {
+      l.style.left = `${right + 8}px`;
+      l.style.top = `${Math.max(2, Math.min(height - gap, y - gap / 2 + 2))}px`;
+    }
+  };
+  requestAnimationFrame(draw);
+  if (ends) return box;
+  const legend = h('div.legend.row', null, factions.map((f) => h('span', { style: { color: f.color } }, f.id === app.me ? `${f.name} (you)` : f.name)));
+  return h('div', null, box, legend);
+}
+
+// The hundred: the captains from the worst at the bottom to the best at the top, and the player among them. The list
+// scrolls up from the worst and stops at the player.
+function hallOfCaptains(app: App, share: number): HTMLElement {
+  const slot = slotOf(share);
+  const f = app.faction;
+  const total = CAPTAINS.length + 1;
+  const rank = total - slot; // 1 is the best
+  const entries: HTMLElement[] = [];
+  const me = h('div.captain.me', null, h('span.rank', null, `#${rank}`), h('span.grow', null, `${f.leader} of the ${f.name}`, h('span.dim', null, ' (you)')));
+  if (slot === CAPTAINS.length) entries.push(me);
+  for (let i = CAPTAINS.length - 1; i >= 0; i--) {
+    entries.push(h('div.captain', null, h('span.rank', null, `#${CAPTAINS.length - i + (i < slot ? 1 : 0)}`), h('span.grow', null, CAPTAINS[i].name)));
+    if (i === slot) entries.push(me);
+  }
+  const list = h('div.hall', null, entries);
+  // The reveal: the list starts at the worst and scrolls up to the player over a few seconds.
+  requestAnimationFrame(() => {
+    const target = Math.max(0, me.offsetTop - list.clientHeight / 2 + me.offsetHeight / 2);
+    const from = list.scrollHeight;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const ms = reduced ? 0 : 3200 + Math.min(2800, (from - target) * 0.6);
+    const start = performance.now();
+    const step = () => {
+      const t = ms ? Math.min(1, (performance.now() - start) / ms) : 1;
+      const k = 1 - Math.pow(1 - t, 3);
+      list.scrollTop = from + (target - from) * k;
+      if (t < 1) requestAnimationFrame(step);
+      else me.classList.add('shown');
+    };
+    list.scrollTop = from;
+    step();
+  });
+  return list;
 }

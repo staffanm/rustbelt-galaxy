@@ -176,9 +176,21 @@ export function morale(s: GameState, f: Faction): MoraleInfo {
   const wars = s.factions.filter((o) => !o.isPirate && o.alive && o.id !== f.id && atWar(s, f.id, o.id)).length;
   if (wars) parts.push({ label: `Wars (${wars})`, value: -wars });
   const total = Math.round(parts.reduce((a, p) => a + p.value, 0));
-  const level = total >= 8 ? 'Inspired' : total >= 0 ? 'Steady' : total >= -5 ? 'Restless' : 'Unrest';
-  return { total, parts, level };
+  return { total, parts, level: moraleLevel(total) };
 }
+
+// The level of a morale total. The interface and the turn log use it for the level of the last shift too.
+export function moraleLevel(total: number): MoraleInfo['level'] {
+  return total >= 8 ? 'Inspired' : total >= 0 ? 'Steady' : total >= -5 ? 'Restless' : 'Unrest';
+}
+
+// What a morale level does to the empire, in words for the player.
+export const MORALE_TEXT: Record<MoraleInfo['level'], string> = {
+  Inspired: '+10% growth, production and science.',
+  Steady: 'No effect.',
+  Restless: 'Growth is halved.',
+  Unrest: 'No growth. Production and science -25%. Unit strength -10%.',
+};
 
 export function moraleEffects(level: MoraleInfo['level']) {
   switch (level) {

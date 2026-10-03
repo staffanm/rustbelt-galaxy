@@ -9,7 +9,7 @@ import { revealTech, techAvailable } from '../core/rules';
 import { buildingSprite, iconUrl, leaderPortrait, planetIconUrl, projectSprite, spriteUrl, stationIconUrl, techSprite, terrainSprite, unitIconUrl } from './art';
 import { TECH_LORE } from '../core/data/techLore';
 import { BUILDING_LORE, PLANET_LORE, PROJECT_LORE, RESOURCE_LORE, TERRAIN_LORE, UNIT_LORE } from '../core/data/lore';
-import { button, h, img, keyHint, type Child } from './dom';
+import { h, img, type Child } from './dom';
 import { yieldRow } from './hud';
 import { openLightbox, originalUrl } from './lightbox';
 import { frame, isPenalty } from './screens';
@@ -53,6 +53,18 @@ function techStatus(app: App, t: { id: string; species?: SpeciesId }): Entry['st
 }
 
 const CONCEPTS: { id: string; name: string; text: string[] }[] = [
+  {
+    id: 'game',
+    name: 'What this game is about',
+    text: [
+      'Rustbelt Galaxy is a turn-based strategy game. You lead one of twelve species in a galaxy that works like an old industrial town: everything is rusty, everything still runs, and everyone has an opinion about the neighbours.',
+      'Colonize: your colony ships found colonies on free planets. Each colony works the hexes round it for food, production, science, credits and influence. More planets give more of everything and lower the morale of your people, who did not ask for an empire.',
+      'Research: science flows into technologies. A technology gives new units, buildings and modifiers, and leads to the next one. Four eras end in the Exodus Gate, a door to a better galaxy and a Science victory.',
+      'Build: each planet has a production queue of units, buildings and projects. Constructors build stations on asteroids, moons and nebulae. Warships hold the borders. Troops take planets from others.',
+      'Interact: the other species like you or not, by what you do and who you are. You trade, send envoys, open borders, make war and make peace. The Interstellar Forum elects a leader, and enough votes are a Forum victory.',
+      'Win: by Science, by the Forum, or by Conquest of half of all home planets. The AI species try the same, each in its own way. A shift is one turn. Ten shifts make a rota, ten rotas fill a ledger, and nobody has seen a second ledger.',
+    ],
+  },
   {
     id: 'turns',
     name: 'The shift and the calendar',
@@ -201,6 +213,7 @@ const CONCEPTS: { id: string; name: string; text: string[] }[] = [
       'The Forum Station project founds the Forum. Only one Forum can exist. The founder invites the other factions with influence.',
       'The members elect a leader each 10 shifts. A faction votes for the member that it supports most: attitude plus lobby points. Each faction also supports itself, by an amount that depends on its species.',
       'A faction wins a Forum victory when it gets more than half of the votes of all factions. A faction outside the Forum has no vote, so it counts against the winner.',
+      'You choose your vote on the Forum screen. A member that voted for the leader gets +1 influence per shift, and the leader cannot declare war on it until the next election.',
       'You can also join a Forum that another faction founded, and win the election there.',
     ],
   },
@@ -493,23 +506,24 @@ export function renderEncyclopedia(app: App): HTMLElement {
         'div.cats',
         null,
         input,
-        categories.map((c, i) =>
-          h(
+        categories.map((c) => {
+          const pick = () => {
+            category = c;
+            query = '';
+            app.open('encyclopedia', undefined);
+          };
+          return h(
             'div.entry.clickable',
             {
               class: !q && c === category ? 'selected' : '',
-              'data-key': i < 9 ? String(i + 1) : undefined,
-              onclick: () => {
-                category = c;
-                query = '';
-                app.open('encyclopedia', undefined);
-              },
+              onclick: pick,
+              // The arrow keys open a category as they reach it. A click or a tap focuses too, so only a keyboard focus counts.
+              onfocus: (e: Event) => (e.target as HTMLElement).matches(':focus-visible') && (!q && c === category ? null : pick()),
             },
             c,
             h('span.dim', null, ` ${all.filter((e) => e.category === c).length}`),
-            i < 9 ? keyHint(String(i + 1)) : null,
-          ),
-        ),
+          );
+        }),
       ),
       h(
         'div.names.keepscroll',
@@ -517,7 +531,12 @@ export function renderEncyclopedia(app: App): HTMLElement {
         list.map((e) =>
           h(
             'div.entry.clickable',
-            { class: `${e.key === current?.key ? 'selected' : ''} ${e.status ?? ''}`, title: statusText(e), onclick: () => app.open('encyclopedia', e.key) },
+            {
+              class: `${e.key === current?.key ? 'selected' : ''} ${e.status ?? ''}`,
+              title: statusText(e),
+              onclick: () => app.open('encyclopedia', e.key),
+              onfocus: (ev: Event) => (ev.target as HTMLElement).matches(':focus-visible') && e.key !== app.screenArg && app.open('encyclopedia', e.key),
+            },
             e.name,
             e.status === 'own' ? h('span.owntag', null, ' yours') : null,
             q ? h('span.dim', null, ` ${e.category}`) : null,
@@ -531,7 +550,6 @@ export function renderEncyclopedia(app: App): HTMLElement {
         null,
         current
           ? [
-              app.mobile ? h('div.row', null, button('Back to the list', () => app.open('encyclopedia', undefined), { cls: 'small' })) : null,
               h('div.head', null, current.name, current.status === 'own' ? h('span.owntag', null, ` ${statusText(current)}`) : current.status ? h('span.bad', null, ` ${statusText(current)}`) : null),
               h('div.dim', null, current.category),
               current.render(link),
@@ -541,5 +559,5 @@ export function renderEncyclopedia(app: App): HTMLElement {
     );
   // The listener is not a click handler of h(), so the keyboard does not stop at the whole page.
   body.addEventListener('click', lightbox);
-  return frame(app, 'Encyclopedia', body, { wide: true });
+  return frame(app, 'Encyclopedia', body, { wide: true, back: app.mobile && app.screenArg ? () => app.open('encyclopedia', undefined) : undefined });
 }

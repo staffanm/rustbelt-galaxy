@@ -215,14 +215,16 @@ export function attack(s: GameState, u: Unit, hex: number): AttackResult | null 
 
   if (t.kind === 'planet') {
     const planet = t.planet!;
+    const wasUp = planet.hp > 0;
     planet.hp = Math.max(0, planet.hp - res.toDefender);
     u.hp -= res.toAttacker;
     emit(s, { kind: 'planetDamaged', planet: planet.id, owner: planet.owner, amount: res.toDefender });
     if (res.toAttacker) emit(s, { kind: 'unitDamaged', unit: u.id, owner: u.owner, hex: u.hex, amount: res.toAttacker });
-    if (planet.hp <= 0) {
+    // The fall of the defences is one entry. Attacks on a planet that is already down are not news.
+    if (planet.hp <= 0 && wasUp) {
       log(s, planet.owner, `The defences of ${planet.name} are down. Ground troops can invade it.`, planet.hex, 'bad');
       log(s, u.owner, `The defences of ${planet.name} are down. Send ground troops.`, planet.hex, 'good');
-    } else {
+    } else if (planet.hp > 0) {
       log(s, planet.owner, `${planet.name} is under attack.`, planet.hex, 'bad');
     }
     if (u.hp <= 0) {

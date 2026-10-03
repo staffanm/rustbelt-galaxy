@@ -7,7 +7,7 @@ import type { Faction, GameSettings, GameState, SpeciesId } from './types';
 import { updateExplored } from './visibility';
 
 // The version of the state format. A change of the format needs a migration in persist.ts.
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 function newFaction(id: number, species: SpeciesId, isHuman: boolean, hexCount: number): Faction {
   const def = SPECIES[species];
@@ -63,6 +63,7 @@ export function newGame(settings: GameSettings): GameState {
     forum: null,
     winner: null,
     log: [],
+    scores: [],
   };
 
   for (let f = 0; f < count; f++) {

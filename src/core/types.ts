@@ -170,6 +170,7 @@ export interface Faction {
   lobby: Record<number, number>; // influence spent on each voter before the next election
   envoys: Record<number, number>; // turn of the last envoy mission to each faction
   budget: Record<BudgetKey, number>; // shares of the credit surplus, 0 to 100 in steps of 10
+  vote?: number; // a human player's choice for the next Forum election, undefined for itself
   lastIncome: { cred: number; sci: number; inf: number; morale: number };
 }
 
@@ -222,4 +223,5 @@ export interface GameState {
   forum: Forum | null;
   winner: { faction: number; kind: VictoryKind; turn: number } | null;
   log: LogEntry[];
+  scores: number[][]; // the score of each real faction at the end of each turn, for the graph at the end
 }

@@ -1,5 +1,6 @@
 // A large view of one image over the whole window. A click closes it.
 import { h } from './dom';
+import { closeButton } from './widgets';
 
 export function openLightbox(src: string): HTMLImageElement {
   const big = h(src.startsWith('data:') ? 'img.px' : 'img.smooth', { src, draggable: 'false' }) as HTMLImageElement;
@@ -19,6 +20,7 @@ export function openLightbox(src: string): HTMLImageElement {
         box.remove();
       },
     },
+    closeButton(() => box.click()),
     big,
     h('div.dim', null, 'Click to close'),
   );

@@ -72,7 +72,7 @@ try {
   await page.getByRole('button', { name: 'Map', exact: true }).tap();
   s = await st(); check('the map tab keeps the planet open', s.planet !== null && s.tab === 'map', s);
   await shot('m07-planet-map');
-  await page.getByRole('button', { name: 'Close', exact: true }).tap();
+  await page.locator('#hud .planetsheet button.widget.close').tap();
   // Zoom out to the smallest size.
   for (let i = 0; i < 4; i++) await page.evaluate(() => window.app.renderer.zoom(-1, 200, 400));
   s = await st(); check('the map zooms out to 16', s.zoom === 16, s);
@@ -89,29 +89,33 @@ try {
   s = await st(); check('a pinch zooms the map out', s.zoom < z0, { z0, now: s.zoom });
   // Menu and screens.
   await page.locator('.menubtn').tap();
-  await page.waitForSelector('.menu');
-  await shot('m09-menu-ingame');
-  await page.getByRole('button', { name: 'Research', exact: true }).tap();
+  await page.waitForSelector('.dropdown');
+  check('the menu button opens a dropdown over the map', (await page.locator('.dropdown .entry').count()) >= 5 && (await page.locator('.menu').count()) === 0);
+  await shot('m09-dropdown');
+  await page.locator('.dropdown .entry', { hasText: 'Research' }).tap();
   await page.waitForTimeout(200);
   await shot('m10-research');
-  await page.getByRole('button', { name: 'Close', exact: true }).tap();
+  await page.locator('.overlay button.widget.close').tap();
   await page.locator('.menubtn').tap();
-  await page.getByRole('button', { name: 'Encyclopedia', exact: true }).tap();
+  await page.locator('.dropdown .entry', { hasText: 'Encyclopedia' }).tap();
   await page.waitForTimeout(200);
   await shot('m11-ency-list');
   await page.locator('.names .entry').nth(2).tap();
   await page.waitForTimeout(200);
   s = await st(); check('an entry opens the detail view', await page.locator('.ency.detail').count() === 1, s);
   await shot('m12-ency-detail');
-  await page.getByRole('button', { name: 'Back to the list', exact: true }).tap();
+  await page.locator('.overlay button.widget.back').tap();
   check('back returns to the list', await page.locator('.ency.list').count() === 1);
-  await page.getByRole('button', { name: 'Close', exact: true }).tap();
+  await page.locator('.overlay button.widget.close').tap();
   // Diplomacy and end turn.
   await page.locator('.menubtn').tap();
-  await page.getByRole('button', { name: 'Diplomacy', exact: true }).tap();
+  await page.evaluate(() => window.app.s.factions[0].met.push(1));
+  await page.locator('.menubtn').tap();
+  await page.locator('.menubtn').tap();
+  await page.locator('.dropdown .entry', { hasText: 'Species' }).tap();
   await page.waitForTimeout(200);
   await shot('m13-diplomacy');
-  await page.getByRole('button', { name: 'Close', exact: true }).tap();
+  await page.locator('.overlay button.widget.close').tap();
   await page.getByRole('button', { name: 'End shift now', exact: true }).tap();
   await page.waitForTimeout(600);
   check('the turn ends', (await page.evaluate(() => window.app.s.turn)) >= 2);

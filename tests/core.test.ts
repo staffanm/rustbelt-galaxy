@@ -9,12 +9,13 @@ import { TECHS, TECH_LIST } from '../src/core/data/techs';
 import { UNITS, UNIT_LIST } from '../src/core/data/units';
 import { calendarDate, dateLong, dateShort } from '../src/core/calendar';
 import { productionAdvice, researchAdvice } from '../src/core/advisor';
+import { CAPTAINS, leadership, slotOf } from '../src/ui/captains';
 import { attack, canAttack, canInvade, capture, engage, invade, invasionStrength, preview } from '../src/core/combat';
 import { attitudeTarget, canDeclareWar, declareWar, proposeDeal } from '../src/core/diplomacy';
 import { HOME_DEFENCE, addRoute, empireIncome, garrisonStrength, removeRoute, routeCap, setBudget, tradeSlots } from '../src/core/economy';
 import { debugLevel, setDebugLevel, setDebugSink } from '../src/core/debug';
 import { recordEvents } from '../src/core/events';
-import { INVITE_COST, forumTick, invite } from '../src/core/forum';
+import { INVITE_COST, forumTick, invite, setVote, supporter, voteOf } from '../src/core/forum';
 import { SAVE_VERSION, newGame } from '../src/core/game';
 import { distance, neighbors, within } from '../src/core/hex';
 import { canEnter, colonize, findPath, orderMove, upgradeBlocker } from '../src/core/movement';
@@ -24,7 +25,7 @@ import { addScience, researchPath, setResearch } from '../src/core/research';
 import { homesNeeded } from '../src/core/victory';
 import { meet } from '../src/core/visibility';
 import { atWar, driveLevel, ownedPlanets, realFactions, resourceVisible, sumMod, techAvailable, techCost, unitAllowed } from '../src/core/rules';
-import { endTurn } from '../src/core/turn';
+import { FORUM_MEMBER_INFLUENCE, FORUM_SUPPORTER_INFLUENCE, endTurn, startFactionTurn } from '../src/core/turn';
 import type { GameSettings, GameState } from '../src/core/types';
 
 const settings: GameSettings = { galaxy: 'small', opponents: 3, difficulty: 2, playerSpecies: 'terran', seed: 42 };
@@ -414,6 +415,25 @@ describe('save files', () => {
   });
 });
 
+describe('hall of captains', () => {
+  it('has 99 captains, at most 10 from Star Trek and at most half human, and one Star Trek captain at the top', () => {
+    expect(CAPTAINS.length).toBe(99);
+    expect(new Set(CAPTAINS.map((c) => c.name)).size).toBe(99);
+    expect(CAPTAINS.filter((c) => /Star Trek/.test(c.source)).length).toBeLessThanOrEqual(10);
+    expect(CAPTAINS.filter((c) => c.human).length * 2).toBeLessThanOrEqual(CAPTAINS.length);
+    expect(/Star Trek/.test(CAPTAINS[CAPTAINS.length - 2].source)).toBe(false);
+    expect(CAPTAINS.map((c) => c.name)).toContain('Zaphod Beeblebrox');
+  });
+
+  it('ranks a win above a loss, a fast win above a slow one, and an eliminated faction at the bottom', () => {
+    expect(leadership(true, false, 90, 500, 500)).toBeGreaterThan(leadership(true, false, 180, 500, 500));
+    expect(leadership(true, false, 180, 500, 500)).toBeGreaterThan(leadership(false, false, 120, 500, 500));
+    expect(leadership(false, false, 120, 250, 500)).toBeGreaterThan(leadership(false, true, 120, 250, 500));
+    expect(slotOf(leadership(false, true, 100, 0, 500))).toBeLessThanOrEqual(5);
+    expect(slotOf(leadership(true, false, 80, 900, 900))).toBe(99);
+  });
+});
+
 describe('calendar', () => {
   it('counts ten shifts to a rota and ten rotas to a ledger', () => {
     expect(calendarDate(1)).toEqual({ ledger: 1, rota: 1, shift: 1 });
@@ -575,6 +595,31 @@ describe('forum', () => {
     forumTick(s);
     expect(s.forum!.leader).toBe(0);
     expect(s.winner).toEqual({ faction: 0, kind: 'forum', turn: s.turn });
+  });
+
+  it('lets a human member choose its vote, and rewards a vote for the leader', () => {
+    const s = newGame(settings);
+    // A war declared before the Forum exists: a member at war cannot vote for its enemy.
+    meet(s, 0, 2);
+    declareWar(s, 0, 2);
+    s.forum = { founder: 1, host: ownedPlanets(s, 1)[0].id, members: [0, 1, 2, 3], leader: -1, nextElection: s.turn, lastVotes: {} };
+    expect(voteOf(s, 0)).toBe(0);
+    expect(setVote(s, 0, 0)).toBe(false);
+    expect(setVote(s, 0, 2)).toBe(false);
+    expect(setVote(s, 0, 1)).toBe(true);
+    expect(voteOf(s, 0)).toBe(1);
+    // The other AI members like faction 1 enough to vote for it.
+    s.attitude[2][1] = 90;
+    s.attitude[3][1] = 90;
+    forumTick(s);
+    expect(s.forum!.leader).toBe(1);
+    expect(s.factions[0].vote).toBeUndefined();
+    expect(supporter(s, 0)).toBe(true);
+    expect(canDeclareWar(s, 1, 0)).toBe(false);
+    const before = s.factions[0].influence;
+    startFactionTurn(s, s.factions[0]);
+    const inc = empireIncome(s, s.factions[0]);
+    expect(s.factions[0].influence - before).toBeCloseTo(inc.inf + FORUM_MEMBER_INFLUENCE + FORUM_SUPPORTER_INFLUENCE, 5);
   });
 
   it('counts a faction outside the Forum as a vote against the winner', () => {

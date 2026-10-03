@@ -41,6 +41,7 @@ export type ScreenId =
   | 'units'
   | 'planets'
   | 'budget'
+  | 'power'
   | 'help'
   | 'about'
   | null;
@@ -60,6 +61,11 @@ export class App {
   planetTab: 'planet' | 'production' | 'map' = 'planet';
   // On a phone a long press shows the hex sheet in place of the unit sheet until the next tap.
   peek = false;
+  // On a phone the menu button opens a dropdown over the map.
+  menuOpen = false;
+  // The planet search on the map: the text typed so far, or null when the box is closed. Key: /
+  search: string | null = null;
+  searchPick = 0;
   showYields = false;
   camera = { x: 0, y: 0, size: 48 };
   reach: Map<number, number> | null = null;
@@ -74,7 +80,10 @@ export class App {
   endShown = false;
   artCount = 0;
   techFocus: string | undefined;
-  private lastEntry: LogEntry | null = null;
+  // The log entries that were shown as toasts. The log is trimmed, so an index into it is not stable.
+  private shown = new WeakSet<LogEntry>();
+  // Toasts of the last shift, on their way out.
+  fading = new Set<LogEntry>();
   private events: GameEvent[] = [];
   renderer: Renderer;
   hud: HTMLElement;
@@ -126,7 +135,8 @@ export class App {
     this.anims.clear();
     this.pulses = [];
     this.endShown = false;
-    this.lastEntry = s.log[s.log.length - 1] ?? null;
+    for (const l of s.log) this.shown.add(l);
+    this.fading.clear();
     this.events = recordEvents(s);
     updateExplored(s, this.me);
     const cap = capital(s, this.me);
@@ -158,18 +168,31 @@ export class App {
   }
 
   private collectLog() {
-    const log = this.s.log;
-    const at = this.lastEntry ? log.indexOf(this.lastEntry) : -1;
-    const fresh = at >= 0 || !this.lastEntry ? log.slice(at + 1) : log.filter((l) => l.turn >= this.s.turn - 1);
-    for (const l of fresh) if (l.faction === this.me || l.faction === -1) this.toasts.push(l);
+    for (const l of this.s.log) {
+      if (this.shown.has(l)) continue;
+      this.shown.add(l);
+      if (l.faction === this.me || l.faction === -1) this.toasts.push(l);
+    }
     if (this.toasts.length > 12) this.toasts.splice(0, this.toasts.length - 12);
-    this.lastEntry = log[log.length - 1] ?? null;
+  }
+
+  // The toasts of the shift that ends slide away, so the new shift starts with the news of the new shift only.
+  private fadeToasts() {
+    const old = this.toasts.filter((t) => !this.fading.has(t));
+    if (!old.length) return;
+    for (const t of old) this.fading.add(t);
+    setTimeout(() => {
+      this.toasts = this.toasts.filter((t) => !this.fading.has(t));
+      this.fading.clear();
+      this.refresh();
+    }, 600);
   }
 
   // The screen that Close returns to, when a screen was opened from another screen: the encyclopedia from the new game screen.
   private back: ScreenId = null;
 
   open(screen: ScreenId, arg?: string) {
+    this.menuOpen = false;
     if (screen === 'encyclopedia' && this.screen === 'newgame') this.back = 'newgame';
     else if (screen !== 'encyclopedia') this.back = null;
     this.screen = screen;
@@ -272,6 +295,7 @@ export class App {
   tapHex(hex: number) {
     const s = this.s;
     this.peek = false;
+    this.menuOpen = false;
     if (hex < 0) {
       this.hover = -1;
       this.select(null);
@@ -311,6 +335,28 @@ export class App {
     this.commandHex(hex);
   }
 
+  // The known planets whose names contain the search text, nearest to the capital first.
+  searchResults(): Planet[] {
+    const s = this.s;
+    const q = (this.search ?? '').trim().toLowerCase();
+    const f = this.faction;
+    const cap = capital(s, this.me);
+    return s.planets
+      .filter((p) => f.explored[p.hex] && (!q || p.name.toLowerCase().includes(q)))
+      .sort((a, b) => (cap ? distance(s, cap.hex, a.hex) - distance(s, cap.hex, b.hex) : 0))
+      .slice(0, 8);
+  }
+
+  // Closes the search and goes to the planet: the map centres on it, and an own planet opens.
+  goToPlanet(p: Planet) {
+    this.search = null;
+    this.hover = p.hex;
+    this.peek = this.mobile;
+    this.showOnMap(p.hex);
+    if (p.owner === this.me) this.openPlanet(p);
+    else this.refresh();
+  }
+
   // Moves the map to the hex and marks it with rings for a few seconds.
   showOnMap(hex: number) {
     this.renderer.centerOn(hex);
@@ -319,8 +365,8 @@ export class App {
     this.renderer.request();
   }
 
-  float(hex: number, text: string, color: string) {
-    this.effects.push({ hex, text, color, start: performance.now() + this.effects.filter((e) => e.hex === hex).length * 250 });
+  float(hex: number, text: string, color: string, start = performance.now()) {
+    this.effects.push({ hex, text, color, start: start + this.effects.filter((e) => e.hex === hex && Math.abs(e.start - start) < 250).length * 250 });
   }
 
   // Slides the unit along the path from its old position. Steps that the unit did not take are removed.
@@ -329,7 +375,9 @@ export class App {
     let steps = path ?? [];
     const at = steps.indexOf(u.hex);
     steps = at >= 0 ? steps.slice(0, at + 1) : [u.hex];
-    this.anims.set(u.id, { path: [from, ...steps], start: performance.now(), msPerHex });
+    const hexes = [from, ...steps];
+    const now = performance.now();
+    this.anims.set(u.id, { path: hexes, times: hexes.map((_, i) => now + i * msPerHex) });
   }
 
   commandHex(hex: number) {
@@ -467,7 +515,7 @@ export class App {
     }
     this.planetId = null;
     this.mode = 'normal';
-    this.toasts = [];
+    this.fadeToasts();
     this.skipped.clear();
     const before = this.vis;
     this.events.length = 0;
@@ -479,40 +527,68 @@ export class App {
     this.refresh();
   }
 
-  // Animates the events of the turn change: unit moves, damage, growth, new buildings, new borders.
-  // "before" is the visibility at the end of the player turn.
+  // Replays the events of the turn change in order, as the player could see them: each visible move and each hit
+  // gets its own moment, so a coordinated attack reads as a sequence. "before" is the visibility at the end of the
+  // player turn. The replay is compressed when it would take more than a few seconds.
   private showChanges(before: Uint8Array) {
     const s = this.s;
     const vis = computeVisible(s, this.me);
     const now = performance.now();
     const color = this.faction.color;
-    const starts = new Map<number, number>();
+    const STEP = 240; // one hex of a move
+    const HIT = 420; // one hit or capture
+    const LIMIT = 7000;
+    const seen = (hex: number) => before[hex] === 2 || vis[hex] === 2;
+    const planetHex = (id: number) => s.planets[id].hex;
+    let t = 0;
+    const anims = new Map<number, UnitAnim>();
+    const floats: { hex: number; text: string; color: string; at: number }[] = [];
     for (const e of this.events) {
       if (e.kind === 'unitMoved') {
-        if (!starts.has(e.unit)) starts.set(e.unit, e.from);
+        const mine = e.owner === this.me;
+        if (!mine && !seen(e.from) && !seen(e.to)) continue;
+        const anim = anims.get(e.unit);
+        if (anim && anim.path[anim.path.length - 1] === e.from) {
+          anim.path.push(e.to);
+          anim.times.push(t + STEP);
+        } else anims.set(e.unit, { path: [e.from, e.to], times: [t, t + STEP] });
+        t += STEP;
       } else if (e.kind === 'unitDamaged') {
-        if (e.owner === this.me) this.float(e.hex, `-${e.amount}`, '#ff6b5a');
+        if (e.owner === this.me || seen(e.hex)) {
+          floats.push({ hex: e.hex, text: `-${e.amount}`, color: e.owner === this.me ? '#ff6b5a' : '#f0c93a', at: t });
+          t += HIT;
+        }
       } else if (e.kind === 'unitDestroyed') {
-        if (e.owner === this.me) this.float(e.hex, 'LOST', '#ff6b5a');
+        if (e.owner === this.me || seen(e.hex)) {
+          floats.push({ hex: e.hex, text: e.owner === this.me ? 'LOST' : 'DESTROYED', color: e.owner === this.me ? '#ff6b5a' : '#f0c93a', at: t });
+          t += HIT;
+        }
       } else if (e.kind === 'planetDamaged') {
-        if (e.owner === this.me) this.float(s.planets[e.planet].hex, `-${e.amount}`, '#ff6b5a');
+        if (e.owner === this.me || seen(planetHex(e.planet))) {
+          floats.push({ hex: planetHex(e.planet), text: `-${e.amount}`, color: e.owner === this.me ? '#ff6b5a' : '#f0c93a', at: t });
+          t += HIT;
+        }
+      } else if (e.kind === 'planetCaptured') {
+        if (e.from === this.me || e.by === this.me || seen(planetHex(e.planet))) {
+          floats.push({ hex: planetHex(e.planet), text: 'CAPTURED', color: e.from === this.me ? '#ff6b5a' : '#f0c93a', at: t });
+          t += HIT;
+        }
       } else if (e.kind === 'planetGrew') {
-        if (e.owner === this.me) this.float(s.planets[e.planet].hex, '+1 POP', '#7fc25a');
+        if (e.owner === this.me) floats.push({ hex: planetHex(e.planet), text: '+1 POP', color: '#7fc25a', at: 0 });
       } else if (e.kind === 'itemCompleted') {
-        if (e.owner === this.me && e.item.kind === 'building') this.float(s.planets[e.planet].hex, 'BUILT', '#f0c93a');
+        if (e.owner === this.me && e.item.kind === 'building') floats.push({ hex: planetHex(e.planet), text: 'BUILT', color: '#f0c93a', at: 0 });
       } else if (e.kind === 'borderGrew') {
         if (e.owner === this.me) this.pulses.push({ hex: e.hex, start: now, color });
       }
     }
     this.events.length = 0;
-    let delay = 0;
-    for (const u of s.units) {
-      const from = starts.get(u.id);
-      if (from === undefined || from === u.hex) continue;
-      if (u.owner !== this.me && before[from] !== 2 && vis[u.hex] !== 2) continue;
-      this.anims.set(u.id, { path: [from, u.hex], start: now + delay, msPerHex: 380 });
-      delay += 40;
+    const k = t > LIMIT ? LIMIT / t : 1;
+    for (const [id, anim] of anims) {
+      if (!s.units.some((u) => u.id === id)) continue;
+      anim.times = anim.times.map((x) => now + x * k);
+      this.anims.set(id, anim);
     }
+    for (const f of floats) this.float(f.hex, f.text, f.color, now + f.at * k);
   }
 
   attackPreview(hex: number) {
@@ -693,6 +769,13 @@ export class App {
     if (e.key === '?') {
       if (this.screen === 'help') this.close();
       else this.open('help');
+      return;
+    }
+    if (e.key === '/' && this.s && !this.screen) {
+      e.preventDefault();
+      this.search = '';
+      this.searchPick = 0;
+      this.refresh();
       return;
     }
     if (this.screen) {

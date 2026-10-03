@@ -119,6 +119,7 @@ Conquest needs half of all home planets, the own one included, and 3 or more (`h
 A home planet that its first owner still holds has 8% more planet strength and garrison strength (`HOME_DEFENCE`).
 The Exodus Gate costs 7000. Each turn it gets the production of its planet and half of the empire science (`GATE_SCIENCE_SHARE`).
 A Forum victory needs more than half of the votes of all living factions. A faction outside the Forum has no vote, so it counts against the winner.
+A human member chooses its vote (`setVote`, `Faction.vote`); an AI member votes by support. A member that voted for the leader is a supporter (`supporter`): it gets `FORUM_SUPPORTER_INFLUENCE` each shift, and the leader cannot declare war on it until the next election. The votes reset at each election.
 
 ### Knowledge of a captured planet
 
@@ -159,6 +160,7 @@ Each drive also adds 4 hexes to the range of trade routes.
 The game state is plain JSON (`GameState` in `src/core/types.ts`). A save is `JSON.stringify` of the state.
 `src/core/persist.ts` decodes a save: it runs the migrations from the version of the file to `SAVE_VERSION`, then validates ids, references, sizes and numbers. `src/ui/save.ts` has only the browser storage and the file download.
 A change of the state format adds one migration and adds 1 to `SAVE_VERSION`.
+`GameState.scores` holds the score of each real faction at the end of each turn (version 3). The end screen draws it as a graph, and places the player in the hall of captains (`src/ui/captains.ts`): 99 leaders of science fiction from the worst to the best, which makes a hundred with the player, with the player's slot from `leadership`, which ranks a win by its speed and a loss by the score against the best.
 The random number generator keeps its state in `GameState.rng`, so a loaded game continues the same sequence.
 The rules code in `src/core` has no dependency on the browser.
 

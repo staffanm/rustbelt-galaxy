@@ -103,7 +103,7 @@ const TERRAIN_VISUAL: Record<string, string> = {
 
 const LEADER_VISUAL: Record<string, string> = {
   terran: 'A grizzled human woman of about sixty, a union foreman: a weathered face with deep wrinkles and crow\'s feet, short grey hair under a dented hard hat, an orange work jacket with patches, a tired but friendly look. She is old and tough, not young. She rests a large wrench on her shoulder. The wrench is one rigid straight tool of even thickness: its handle is a single straight bar with the same width along its whole length, from her hand to its jaw, and the whole wrench is in front of her shoulder, so no part of it is hidden.',
-  krogg: 'A huge green alien warlord woman with tusks and small horns: red spiked armour, scars, a calm and patient stare.',
+  krogg: 'A huge green alien warlord woman with tusks and small horns, in heavy red plate armour that covers the shoulders, chest and neck, with spikes on the pauldrons and a thick gorget, old scars on the face, a calm and patient stare. The outlines are thick and dark, as in the other portraits of this game.',
   ilthari: 'A thin alien academic with glowing teal skin, a tall smooth head and large white eyes: a dark teal robe with a high collar, small floating data crystals.',
   ozmok: 'A cheerful alien trader that is not humanoid: a wide, round amphibian creature like a fat tree frog, with smooth teal skin with gold speckles, two eyes on short stalks, a very wide mouth and four short arms. It has no nose, no ears and no hair. It wears a green accounting visor and a sash of brass price tags, and one hand holds an abacus. It is not a human, not a goblin and not a gnome.',
   seren: 'A tall calm alien diplomat with pale blue skin and a serene, polite, professional smile: a tailored violet diplomatic coat with a high collar, a white sash with three small ribbons of office, a slim folder of treaties under one arm. A statesman, not a priest: no robes, no circlet, no halo, no glow behind the head and no religious symbols.',
@@ -185,6 +185,14 @@ const ICON_VISUAL: Record<string, [string, string]> = {
   inf: ['Influence', 'one five-point star badge, a violet purple dominant colour'],
   morale: ['Morale', 'one round smiling face with two dot eyes and a wide mouth, a warm yellow dominant colour'],
 };
+// Two map markers that share the icon folder: the anomaly and the pirate den.
+const MARKER_VISUAL: Record<string, [string, string]> = {
+  anomaly: ['Anomaly', 'a swirl of pale cyan and white light with a bold white question mark in the middle, like a signal that nobody can read, a glowing cyan dominant colour'],
+  den: ['Pirate den', 'a grinning skull made of welded scrap metal with one red glowing eye socket and two crossed wrenches behind it, a bone white and rust dominant colour'],
+};
+for (const [id, [name, visual]] of Object.entries(MARKER_VISUAL)) {
+  add('Icons', `icons/${id}.png`, `${name} marker`, `A map marker for a space strategy game, one single object and nothing else: "${name}", ${visual}. A simple bold silhouette with a thick dark outline, so that it reads clearly at a very small size.`, RESOURCE_STYLE);
+}
 const ICON_STYLE = RESOURCE_STYLE;
 for (const [id, [name, visual]] of Object.entries(ICON_VISUAL)) {
   add('Icons', `icons/${id}.png`, `${name} icon`, `A user interface icon for "${name}" in a strategy game: ${visual}. One single object and nothing else, as plain as a road sign, with no small details, so that it reads clearly at 16 pixels.`, ICON_STYLE);
@@ -376,9 +384,19 @@ add(
   'Interface',
   'ui/icon.png',
   'App icon',
-  'A square app icon for the game "Rustbelt Galaxy", for a phone home screen: one small rusty, patched starship seen from the side, with one glowing cyan engine, in front of a large worn industrial planet with a thin ring. Big bold shapes that read at 60 pixels: no small details, no stars, no text. The subject fills the whole frame. A plain dark blue-black background that fills the frame, no transparency.',
+  'A square app icon for the game "Rustbelt Galaxy", for a phone home screen: one rusty, patched starship seen from the side, with one glowing cyan engine, and nothing else. The ship is big and fills most of the frame, drawn with five or six large shapes and a thick dark outline, so that it reads at 60 pixels. No planet, no stars, no small details, no text. A plain dark blue-black background that fills the frame, no transparency.',
   STYLE.replace('cartoon illustration for a game', 'cartoon app icon for a game').replace(BACKGROUND, 'Full frame, no transparency. Square image.'),
 );
+
+// Interface widgets: the close and back buttons that every screen and sheet shares.
+const WIDGET_STYLE = STYLE.replace('cartoon illustration for a game', 'cartoon user interface button for a game');
+const WIDGET_VISUAL: Record<string, [string, string]> = {
+  close: ['Close button', 'a square riveted steel button plate with a bold white X painted on it, the paint a little worn'],
+  back: ['Back button', 'a square riveted steel button plate with a bold white arrow that points left painted on it, the paint a little worn'],
+};
+for (const [id, [name, visual]] of Object.entries(WIDGET_VISUAL)) {
+  add('Widgets', `widgets/${id}.png`, name, `A user interface button: ${visual}. One single square plate and nothing else, with a thick dark outline, big simple shapes and no small details, so that it reads clearly at 32 pixels. The plate fills the frame.`, WIDGET_STYLE);
+}
 
 for (const e of entries) if (e.prompt.includes('undefined')) throw new Error(`no visual text for ${e.file}`);
 writeFileSync('art/prompts.json', JSON.stringify({ references: REFERENCES, output: 'art/originals/hd', entries }, null, 2) + '\n');

@@ -25,9 +25,9 @@ const CATEGORY_COLOR: Record<TechCategory, string> = {
 };
 export const ERA_NAMES = ['', 'Era 1: First Steps', 'Era 2: Expansion', 'Era 3: Empire', 'Era 4: Ascendancy'];
 
-const CARD_W = 272;
+const CARD_W = 236;
 const CARD_H = 92;
-const GAP_X = 70;
+const GAP_X = 48;
 const GAP_Y = 12;
 const TOP = 34;
 
@@ -142,7 +142,7 @@ export function renderTech(app: App): HTMLElement {
     app,
     'Research',
     [
-      h('div.dim.intro', null, `Click a technology to research it. The game adds the technologies that it needs first. Point at a technology to read about it below. Your species has 3 own technologies and cannot research ${excluded} of the common ones.`),
+      h('div.dim.intro', null, `Click a technology to research it. The game adds the technologies that it needs first. Your species cannot research ${excluded} of the common technologies.`),
       advisors(app, sci),
       captured.length
         ? h('div', null, 'Captured knowledge: ', captured.map((id, i) => [i ? ', ' : '', h('a.link', { onclick: () => app.open('encyclopedia', `tech:${id}`) }, TECHS[id].name)]), '. You can build the units and buildings of these technologies.')

@@ -137,14 +137,14 @@ const LIST: BuildingDef[] = [
   },
   {
     id: 'institute',
-    name: 'Research Institute',
+    name: 'Night School',
     cost: 130,
     upkeep: 2,
     tech: 'computing',
     category: 'sci',
     flat: { sci: 3 },
     mult: { sci: 0.25 },
-    text: '+3 science and +25% science.',
+    text: '+3 science and +25% science. The university of a working planet: lectures after the shift, exams before it.',
   },
   {
     id: 'holo_arena',

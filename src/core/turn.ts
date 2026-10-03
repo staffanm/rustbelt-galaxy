@@ -1,21 +1,22 @@
 import { autoExplore, runAI } from './ai/ai';
-import { empireIncome } from './economy';
+import { MORALE_TEXT, empireIncome, moraleLevel } from './economy';
 import { ENGINE, debug, factionLabel } from './debug';
 import { emit } from './events';
 import { driftAttitudes } from './diplomacy';
-import { forumTick } from './forum';
+import { forumTick, supporter } from './forum';
 import { findPath, moveToward, refreshUnits, removeUnit } from './movement';
 import { piratesTurn } from './pirates';
 import { processPlanet } from './planet';
 import { addScience } from './research';
-import { log, ownedPlanets } from './rules';
+import { log, ownedPlanets, realFactions } from './rules';
 import type { Faction, GameState } from './types';
 import { UNITS } from './data/units';
-import { checkConquest } from './victory';
+import { checkConquest, score } from './victory';
 import { updateExplored } from './visibility';
 
 export const FORUM_LEADER_INFLUENCE = 3;
 export const FORUM_MEMBER_INFLUENCE = 1;
+export const FORUM_SUPPORTER_INFLUENCE = 1; // patronage: for a member that voted for the leader
 
 // The start of a faction turn has a fixed order:
 // 1. Income. Credits, influence and science come from the state before this turn: morale, technologies, planets.
@@ -28,8 +29,14 @@ export function startFactionTurn(s: GameState, f: Faction) {
   const inc = empireIncome(s, f);
   f.credits += inc.cred;
   f.influence += inc.inf;
-  if (s.forum?.members.includes(f.id)) f.influence += s.forum.leader === f.id ? FORUM_LEADER_INFLUENCE : FORUM_MEMBER_INFLUENCE;
+  if (s.forum?.members.includes(f.id)) f.influence += s.forum.leader === f.id ? FORUM_LEADER_INFLUENCE : FORUM_MEMBER_INFLUENCE + (supporter(s, f.id) ? FORUM_SUPPORTER_INFLUENCE : 0);
   addScience(s, f, inc.sci);
+  // A change of the morale level is a log entry, so the player sees the penalty start and end.
+  const was = moraleLevel(f.lastIncome.morale);
+  if (s.turn > 1 && inc.morale.level !== was) {
+    const worse = inc.morale.total < f.lastIncome.morale;
+    log(s, f.id, `Morale is now ${inc.morale.level} (${inc.morale.total}). ${MORALE_TEXT[inc.morale.level]}`, undefined, worse ? 'bad' : 'good');
+  }
   f.lastIncome = { cred: inc.cred, sci: inc.sci, inf: inc.inf, morale: inc.morale.total };
   debug(s, 'major', ENGINE, () => `turn of ${factionLabel(f)} starts: income ${inc.cred.toFixed(1)} credits, ${inc.sci.toFixed(1)} science, ${inc.inf.toFixed(1)} influence, morale ${inc.morale.total} (${inc.morale.level})`);
   for (const p of ownedPlanets(s, f.id)) processPlanet(s, p, inc.morale.level, inc.sci);
@@ -87,6 +94,7 @@ export function endTurn(s: GameState) {
   }
   debug(s, 'major', ENGINE, () => 'turn of the pirates starts');
   piratesTurn(s);
+  s.scores.push(realFactions(s).map((f) => score(s, f.id)));
   s.turn += 1;
   forumTick(s);
   if (s.winner) return;

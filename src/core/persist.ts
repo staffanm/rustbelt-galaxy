@@ -22,6 +22,10 @@ const RENAMED_TECHS: Record<string, string> = { warrior_caste: 'blessed_hulls' }
 // MIGRATIONS[n] changes a state of version n into a state of version n + 1. A change of the state format adds one
 // entry here and adds 1 to SAVE_VERSION.
 const MIGRATIONS: Record<number, (s: GameState) => void> = {
+  // Version 2 had no score history.
+  2(s) {
+    s.scores ??= [];
+  },
   // Version 1 had saves without the budget and with the old id of Blessed Hulls.
   1(s) {
     for (const f of s.factions) {
@@ -153,6 +157,7 @@ function check(s: GameState) {
     need(explored === hexes || (f.isPirate && explored === 0), `${what} explored length`);
     for (const m of list(f.met, `${what} met`)) need(index(m, factions) && m !== i, `${what} met`);
     need(!!f.lobby && !!f.envoys && typeof f.lobby === 'object' && typeof f.envoys === 'object', `${what} lobby and envoys`);
+    need(f.vote === undefined || (index(f.vote, factions) && f.vote !== i), `${what} vote`);
     need(!!f.budget && isBudget(f.budget.research) && isBudget(f.budget.welfare), `${what} budget`);
     need(f.budget.research + f.budget.welfare <= 100, `${what} budget sum`);
     need(!!f.lastIncome && [f.lastIncome.cred, f.lastIncome.sci, f.lastIncome.inf, f.lastIncome.morale].every(isNum), `${what} last income`);
@@ -180,5 +185,6 @@ function check(s: GameState) {
     need(!!s.winner && index(s.winner.faction, factions) && isInt(s.winner.turn), 'winner');
     need(['conquest', 'science', 'forum'].includes(s.winner.kind), 'winner kind');
   }
+  for (const row of list(s.scores, 'scores')) need(Array.isArray(row) && row.every(isNum), 'score history');
   for (const l of list(s.log, 'log') as GameState['log']) need(!!l && typeof l.text === 'string' && isInt(l.turn), 'log entry');
 }

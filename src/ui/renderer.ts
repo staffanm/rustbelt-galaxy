@@ -22,11 +22,11 @@ export interface Effect {
   start: number;
 }
 
-// A unit slides along a path of hexes.
+// A unit slides along a path of hexes. times[i] is when the unit is at path[i]. Before the first time the unit
+// stands on path[0], so a replay of the turn can show the moves of several units one after the other.
 export interface UnitAnim {
   path: number[];
-  start: number;
-  msPerHex: number;
+  times: number[];
 }
 
 // A hex outline that grows and fades, for a new border hex.
@@ -297,7 +297,17 @@ export class Renderer {
       // strategic, teal for luxury. With a station on the hex, the disc sits on the corner of the station.
       const sx = x + R * 0.4;
       const sy = y + R * 0.36;
-      if (h.station) this.sprite(stationSprite(h.terrain), sx, sy, mark, R * 0.95);
+      if (h.station) {
+        // A dark disc with a pale ring behind the station, so that it stands out from the terrain under it.
+        ctx.beginPath();
+        ctx.arc(sx, sy, R * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(8, 10, 16, 0.78)';
+        ctx.fill();
+        ctx.lineWidth = Math.max(1.5, R * 0.05);
+        ctx.strokeStyle = 'rgba(232, 222, 196, 0.7)';
+        ctx.stroke();
+        this.sprite(stationSprite(h.terrain), sx, sy, mark, R * 0.95);
+      }
       if (h.resource && resourceVisible(me, h.resource)) {
         const rr = Math.max(12, R * 0.42) * (h.station ? 0.75 : 1);
         const rx = h.station ? sx - R * 0.38 : x - R * 0.45;
@@ -311,8 +321,8 @@ export class Renderer {
         ctx.stroke();
         this.sprite(resourceIcon(h.resource), rx, ry, mark, rr * 1.7);
       }
-      if (h.anomaly) this.sprite(icon('anomaly'), x, y, mark * 1.2);
-      if (h.den && vis[i]) this.sprite(icon('den'), x, y, mark * 1.2);
+      if (h.anomaly) this.sprite(iconSprite('anomaly'), x, y, mark * 1.2, R * 0.7);
+      if (h.den && vis[i]) this.sprite(iconSprite('den'), x, y, mark * 1.2, R * 0.8);
     }
 
     // Borders
@@ -485,14 +495,14 @@ export class Renderer {
     const moving: { u: Unit; x: number; y: number }[] = [];
     for (const [id, anim] of app.anims) {
       const u = s.units.find((o) => o.id === id);
-      const t = (now0 - anim.start) / (anim.msPerHex * (anim.path.length - 1));
-      if (!u || t >= 1 || anim.path.length < 2) {
+      const last = anim.times.length - 1;
+      if (!u || anim.path.length < 2 || now0 >= anim.times[last]) {
         app.anims.delete(id);
         continue;
       }
-      if (t < 0) continue;
-      const seg = Math.min(anim.path.length - 2, Math.floor(t * (anim.path.length - 1)));
-      const k = t * (anim.path.length - 1) - seg;
+      let seg = 0;
+      while (seg < last - 1 && now0 >= anim.times[seg + 1]) seg++;
+      const k = now0 < anim.times[0] ? 0 : Math.min(1, (now0 - anim.times[seg]) / Math.max(1, anim.times[seg + 1] - anim.times[seg]));
       const a = this.center(anim.path[seg]);
       const b = this.center(anim.path[seg + 1]);
       moving.push({ u, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });

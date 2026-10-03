@@ -1,5 +1,0 @@
-ui/title.png
-leaders/terran.png
-leaders/ashari.png
-leaders/vessani.png
-ui/icon.png

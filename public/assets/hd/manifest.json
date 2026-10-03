@@ -44,7 +44,9 @@
     "halls/seren.png",
     "halls/terran.png",
     "halls/vessani.png",
+    "icons/anomaly.png",
     "icons/cred.png",
+    "icons/den.png",
     "icons/food.png",
     "icons/inf.png",
     "icons/morale.png",
@@ -165,6 +167,7 @@
     "terrain/nebula.png",
     "terrain/rift.png",
     "terrain/star.png",
+    "ui/icon.png",
     "ui/title.png",
     "units/aegis_cruiser.png",
     "units/ashari_cathedral_ship.png",
@@ -218,6 +221,8 @@
     "units/tug_militia.png",
     "units/vessani_cell.png",
     "units/vessani_mimic.png",
-    "units/vessani_phase_cruiser.png"
+    "units/vessani_phase_cruiser.png",
+    "widgets/back.png",
+    "widgets/close.png"
   ]
 }

@@ -133,7 +133,7 @@ export const BUILDING_LORE: Record<string, string> = {
   exchange:
     'The stock exchange has columns, a pediment and a ticker board, because money likes to be housed like a temple. Shouting is the main technology, and the building is designed to carry it.',
   institute:
-    'A research institute has a clock tower, ivy, a bell and a very large lecture hall. Students arrive to learn, stay to argue, and leave with a degree and a grudge against the bell.',
+    'A night school has a clock tower, ivy, a bell and a very large lecture hall, and all of them are busy after dark. It is the university of a planet where everyone works days. Students arrive to learn, stay to argue, and leave with a degree and a grudge against the bell.',
   holo_arena:
     'The holo-arena is a stadium where gladiators made of light fight for a crowd made of people. The gladiators are not real. The bets are. Morale goes up, and so does the noise.',
   shield_generator:

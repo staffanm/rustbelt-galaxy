@@ -3,7 +3,7 @@ import { PLANET_TYPES, RESOURCES, TERRAIN, YIELD_KEYS, YIELD_NAMES } from '../co
 import { TECHS } from '../core/data/techs';
 import { UNITS } from '../core/data/units';
 import { canInvade, defenceStrength, invasionStrength } from '../core/combat';
-import { empireIncome, empireRoutes, garrisonStrength, hexYield, planetMaxHp, planetStrength, routeCap } from '../core/economy';
+import { MORALE_TEXT, empireIncome, empireRoutes, garrisonStrength, hexYield, planetMaxHp, planetStrength, routeCap } from '../core/economy';
 import { hexCenter } from '../core/hex';
 import { colonizeBlocker, stationBlocker, stationTurns, upgradeBlocker, upgradeCost, upgradeTarget } from '../core/movement';
 import { DRIVE_NAMES, atWar, canColonizeType, colonizeTech, driveLevel, hexFaction, resourceVisible, techCost, unitMove } from '../core/rules';
@@ -12,6 +12,7 @@ import type { App } from './app';
 import { iconUrl, stationIconUrl, unitIconUrl } from './art';
 import { button, clear, fmt, h, img, signed } from './dom';
 import { renderPlanetPanel } from './planetPanel';
+import { closeButton, removeButton } from './widgets';
 
 export function yieldRow(y: Partial<Yields>, digits = 0): HTMLElement {
   const row = h('span.yields');
@@ -37,22 +38,24 @@ export function renderHud(app: App, hoverOnly = false) {
   }
   clear(root);
   root.appendChild(topBar(app));
+  if (app.search !== null) root.appendChild(searchBox(app));
   hexInfo = h('div.hexinfo.panel');
   fillHexInfo(app, hexInfo);
   const u = app.selectedUnit;
   if (app.mobile) {
     // A phone shows one sheet at the bottom: the tapped hex, or the selected unit.
     const sheet = app.planet ? null : app.peek && app.hover >= 0 ? hexInfo : u ? unitPanel(app, u) : null;
-    if (sheet === hexInfo) hexInfo.appendChild(h('span.x', { onclick: () => ((app.hover = -1), (app.peek = false), app.refresh()) }, 'x'));
+    if (sheet === hexInfo) hexInfo.appendChild(closeButton(() => ((app.hover = -1), (app.peek = false), app.refresh())));
     root.appendChild(h('div.bottomleft', null, sheet));
   } else root.appendChild(h('div.bottomleft', null, minimap(app), hexInfo, u && !app.planet ? unitPanel(app, u) : null));
   root.appendChild(endTurnBox(app));
+  if (app.mobile && app.menuOpen) root.appendChild(dropdown(app));
   if (!app.planet) root.appendChild(toasts(app));
   if (app.planet) renderPlanetPanel(app, root);
 }
 
-function stat(icon: string, value: string, label: string, title: string, onClick?: () => void): HTMLElement {
-  return h('div.stat', { title, onclick: onClick, class: onClick ? 'clickable' : '' }, img(iconUrl(icon), 21), h('div', null, h('div.value', null, value), h('div.label', null, label)));
+function stat(icon: string, value: string, label: string, title: string, onClick?: () => void, cls = ''): HTMLElement {
+  return h('div.stat', { title, onclick: onClick, class: `${onClick ? 'clickable' : ''} ${cls}` }, img(iconUrl(icon), 21), h('div', null, h('div.value', null, value), h('div.label', null, label)));
 }
 
 function topBar(app: App): HTMLElement {
@@ -80,7 +83,7 @@ function topBar(app: App): HTMLElement {
     stat('cred', `${fmt(f.credits)} (${signed(inc.cred)})`, f.budget.research || f.budget.welfare ? `Budget ${f.budget.research}% / ${f.budget.welfare}%` : 'Credits', credTitle + '\nClick to open the budget.', () => app.open('budget')),
     stat('sci', `${signed(inc.sci, 1)}`, researchText, 'Science per shift. Click to open the research screen.', () => app.open('tech')),
     stat('inf', `${fmt(f.influence)} (${signed(inc.inf, 1)})`, 'Influence', 'Influence grows borders. You spend it on envoys and in the Forum.'),
-    stat('morale', `${signed(inc.morale.total)}`, inc.morale.level, moraleTitle),
+    stat('morale', `${signed(inc.morale.total)}`, inc.morale.level === 'Unrest' ? 'Unrest: -25% output' : inc.morale.level === 'Restless' ? 'Restless: half growth' : inc.morale.level, moraleTitle, undefined, inc.morale.level === 'Unrest' ? 'alarm' : inc.morale.level === 'Restless' ? 'warn' : ''),
     h('div.stat.routes', { title: 'Trade routes in use and the empire limit. You set routes on the planet screen.' }, h('div', null, h('div.value', null, `${empireRoutes(s, f.id)}/${routeCap(f)}`), h('div.label', null, 'Trade routes'))),
     h('div.stat.drive', { title: 'Your FTL drive. Better drives give all ships more movement.' }, h('div', null, h('div.value', null, DRIVE_NAMES[Math.min(3, driveLevel(f))]), h('div.label', null, 'FTL drive'))),
     ),
@@ -90,27 +93,17 @@ function topBar(app: App): HTMLElement {
       button('Units', () => app.open('units'), { title: 'Key: U' }),
       button('Planets', () => app.open('planets'), { title: 'Key: P' }),
       button('Research', () => app.open('tech'), { title: 'Key: T' }),
-      button('Diplomacy', () => app.open('diplomacy'), { title: 'Key: G' }),
-      button('Forum', () => app.open('forum'), { title: 'Key: O' }),
+      button('Species', () => app.open('diplomacy'), { title: 'Diplomacy, the Forum and power. Key: G' }),
       button('Log', () => app.open('log')),
       button('Encyclopedia', () => app.open('encyclopedia'), { title: 'Key: E' }),
       button('Menu', () => app.open('menu'), { title: 'Key: Esc' }),
-      button('\u2261', () => app.open('menu'), { cls: 'menubtn', title: 'Menu' }),
+      button('\u2261', () => ((app.menuOpen = !app.menuOpen), app.refresh()), { cls: 'menubtn', title: 'Menu' }),
     ),
   );
 }
 
 export function moraleText(level: string): string {
-  switch (level) {
-    case 'Inspired':
-      return 'Inspired: +10% growth, production and science.';
-    case 'Steady':
-      return 'Steady: no effect.';
-    case 'Restless':
-      return 'Restless: growth is halved.';
-    default:
-      return 'Unrest: no growth, -25% production and science, -10% unit strength.';
-  }
+  return `${level}: ${MORALE_TEXT[level as keyof typeof MORALE_TEXT] ?? ''}`;
 }
 
 function fillHexInfo(app: App, box: HTMLElement) {
@@ -235,7 +228,7 @@ function unitPanel(app: App, u: Unit): HTMLElement {
   return h(
     'div.unitpanel.panel',
     null,
-    app.mobile ? h('span.x', { onclick: () => (app.select(null), app.refresh()) }, 'x') : null,
+    app.mobile ? closeButton(() => (app.select(null), app.refresh())) : null,
     img(unitIconUrl(u.type, f.color), app.mobile ? 48 : 72, 'portrait'),
     h(
       'div.info',
@@ -247,6 +240,82 @@ function unitPanel(app: App, u: Unit): HTMLElement {
       h('div.buttons', null, buttons),
     ),
   );
+}
+
+// The phone menu: a list over the map. Screens that have nothing to show yet are left out.
+function dropdown(app: App): HTMLElement {
+  const s = app.s;
+  const f = app.faction;
+  const item = (label: string, screen: Parameters<App['open']>[0]) => h('div.entry.clickable', { onclick: () => app.open(screen) }, label);
+  return h(
+    'div.dropdown.panel',
+    null,
+    h('div.entry.clickable', { onclick: () => ((app.menuOpen = false), (app.search = ''), (app.searchPick = 0), app.refresh()) }, 'Find planet'),
+    item('Units', 'units'),
+    item('Planets', 'planets'),
+    item('Research', 'tech'),
+    item('Species', 'diplomacy'),
+    item('Budget', 'budget'),
+    s.log.some((l) => l.faction === app.me || l.faction === -1) ? item('Log', 'log') : null,
+    item('Encyclopedia', 'encyclopedia'),
+    h('div.entry.clickable.main', { onclick: () => app.open('menu') }, 'Main menu'),
+  );
+}
+
+// The planet search: an input under the top bar with the matching known planets. Enter goes to the picked one.
+function searchBox(app: App): HTMLElement {
+  const s = app.s;
+  const results = app.searchResults();
+  app.searchPick = Math.max(0, Math.min(results.length - 1, app.searchPick));
+  const input = h('input', { type: 'text', value: app.search ?? '', placeholder: 'Planet name', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement;
+  const close = () => {
+    app.search = null;
+    app.refresh();
+  };
+  input.addEventListener('input', () => {
+    app.search = input.value;
+    app.searchPick = 0;
+    app.refresh();
+    const again = app.hud.querySelector('.search input') as HTMLInputElement | null;
+    again?.focus();
+    again?.setSelectionRange(input.value.length, input.value.length);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      app.searchPick = (app.searchPick + (e.key === 'ArrowDown' ? 1 : results.length - 1)) % Math.max(1, results.length);
+      app.refresh();
+      (app.hud.querySelector('.search input') as HTMLInputElement | null)?.focus();
+    } else if (e.key === 'Enter') {
+      const p = results[app.searchPick];
+      if (p) app.goToPlanet(p);
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  const box = h(
+    'div.search.panel',
+    null,
+    h('div.row', null, input, closeButton(close)),
+    h(
+      'div.list',
+      null,
+      results.map((p, i) =>
+        h(
+          'div.entry.clickable',
+          { class: i === app.searchPick ? 'selected' : '', onclick: () => app.goToPlanet(p) },
+          h('span.grow', { style: { color: p.owner >= 0 ? s.factions[p.owner].color : undefined } }, p.name),
+          h('span.dim', null, p.owner >= 0 ? s.factions[p.owner].name : 'Not colonized'),
+        ),
+      ),
+      results.length ? null : h('div.dim', null, 'No known planet has that name.'),
+    ),
+  );
+  requestAnimationFrame(() => {
+    const el = app.hud.querySelector('.search input') as HTMLInputElement | null;
+    if (el && document.activeElement !== el) el.focus();
+  });
+  return box;
 }
 
 function endTurnBox(app: App): HTMLElement {
@@ -270,7 +339,7 @@ function toasts(app: App): HTMLElement {
       h(
         `div.toast.${t.tone ?? 'info'}`,
         {
-          class: t.hex !== undefined ? 'clickable' : '',
+          class: `${t.hex !== undefined ? 'clickable' : ''} ${app.fading.has(t) ? 'fading' : ''}`,
           onclick: () => {
             if (t.hex !== undefined) {
               app.showOnMap(t.hex);
@@ -279,17 +348,10 @@ function toasts(app: App): HTMLElement {
         },
         t.hex !== undefined ? h('span.jump', { title: 'Click to show the place on the map' }, '\u25B8 ') : null,
         t.text,
-        h(
-          'span.x',
-          {
-            onclick: (e: Event) => {
-              e.stopPropagation();
-              app.toasts = app.toasts.filter((x) => x !== t);
-              app.refresh();
-            },
-          },
-          'x',
-        ),
+        removeButton(() => {
+          app.toasts = app.toasts.filter((x) => x !== t);
+          app.refresh();
+        }, 'Dismiss'),
       ),
     );
   }

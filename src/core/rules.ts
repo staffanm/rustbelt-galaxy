@@ -232,7 +232,11 @@ export function realFactions(s: GameState): Faction[] {
   return s.factions.filter((f) => !f.isPirate);
 }
 
+// The same text for the same faction in the same turn is logged once: a planet under attack by five ships is one entry.
 export function log(s: GameState, faction: number, text: string, hex?: number, tone: 'good' | 'bad' | 'info' = 'info') {
+  for (let i = s.log.length - 1; i >= 0 && s.log[i].turn === s.turn; i--) {
+    if (s.log[i].faction === faction && s.log[i].text === text) return;
+  }
   s.log.push({ turn: s.turn, faction, text, hex, tone });
   if (s.log.length > 400) s.log.splice(0, s.log.length - 400);
 }

@@ -79,7 +79,11 @@ export function support(s: GameState, voter: number, candidate: number): number 
   return s.attitude[voter][candidate] + (s.factions[candidate].lobby[voter] ?? 0);
 }
 
+// A human member votes as it chose (setVote), for itself without a choice. An AI member votes for the candidate
+// that it supports most.
 export function voteOf(s: GameState, voter: number): number {
+  const f = s.factions[voter];
+  if (f.isHuman) return f.vote !== undefined && validVote(s, voter, f.vote) ? f.vote : voter;
   let best = voter;
   let bestScore = -Infinity;
   for (const c of s.forum!.members) {
@@ -90,6 +94,25 @@ export function voteOf(s: GameState, voter: number): number {
     }
   }
   return best;
+}
+
+// A member can vote for any member that it is not at war with.
+export function validVote(s: GameState, voter: number, candidate: number): boolean {
+  return !!s.forum && s.forum.members.includes(voter) && s.forum.members.includes(candidate) && !atWar(s, voter, candidate);
+}
+
+// The choice of a human member for the next election. Undefined is a vote for itself.
+export function setVote(s: GameState, voter: number, candidate: number | undefined): boolean {
+  if (candidate !== undefined && (candidate === voter || !validVote(s, voter, candidate))) return false;
+  s.factions[voter].vote = candidate;
+  return true;
+}
+
+// Did the faction vote for the leader at the last election? The leader cannot declare war on it, and it gets
+// influence from the leader each shift (patronage).
+export function supporter(s: GameState, f: number): boolean {
+  const forum = s.forum;
+  return !!forum && forum.leader >= 0 && forum.leader !== f && forum.lastVotes[f] === forum.leader;
 }
 
 // More than half of the votes of all living factions.
@@ -120,6 +143,7 @@ export function forumTick(s: GameState) {
   const [top, count] = [Number(ranked[0][0]), ranked[0][1]];
   const tie = ranked.length > 1 && ranked[1][1] === count;
   forum.leader = tie ? -1 : top;
+  for (const f of realFactions(s)) f.vote = undefined;
   debug(s, 'major', ENGINE, () => `Forum election: ${Object.entries(forum.lastVotes).map(([v, c]) => `#${v} votes for #${c}`).join(', ')}${tie ? ' - tied' : ''}`);
   for (const f of realFactions(s)) f.lobby = {};
   if (tie) {

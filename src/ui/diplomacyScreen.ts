@@ -34,7 +34,10 @@ import {
   livingFactions,
   lobby,
   lobbyCost,
+  setVote,
   support,
+  supporter,
+  validVote,
   voteOf,
   votesNeeded,
 } from '../core/forum';
@@ -45,7 +48,7 @@ import { score } from '../core/victory';
 import type { App } from './app';
 import { leaderPortrait } from './art';
 import { button, fmt, h, img, signed } from './dom';
-import { frame, plural } from './screens';
+import { frame, plural, speciesTabs } from './screens';
 
 let dealWith = -1;
 let deal: Deal = { giveCredits: 0, giveTechs: [], takeCredits: 0, takeTechs: [] };
@@ -241,8 +244,9 @@ export function renderDiplomacy(app: App): HTMLElement {
   const others = realFactions(s).filter((o) => o.id !== app.me);
   return frame(
     app,
-    'Diplomacy',
+    'Species',
     [
+      speciesTabs(app, 'diplomacy'),
       h('div.dim', null, 'Attitude shows how much a faction likes you. It changes what they accept. Each faction lists its reasons, and the attitude moves 1 point per shift to the sum of them.'),
       h(
         'div',
@@ -253,6 +257,29 @@ export function renderDiplomacy(app: App): HTMLElement {
       h('div.factions.keepscroll', { 'data-id': 'diplo' }, others.map((o) => card(app, o))),
     ],
     { wide: true },
+  );
+}
+
+// The player's vote for the next election: itself, or any member that it is not at war with.
+function voteChoice(app: App): HTMLElement {
+  const s = app.s;
+  const f = app.faction;
+  const options = realFactions(s).filter((o) => o.id !== app.me && validVote(s, app.me, o.id));
+  const select = h(
+    'select',
+    null,
+    h('option', { value: '', selected: f.vote === undefined }, 'Yourself'),
+    options.map((o) => h('option', { value: String(o.id), selected: f.vote === o.id }, o.name)),
+  ) as HTMLSelectElement;
+  select.addEventListener('change', () => {
+    setVote(s, app.me, select.value === '' ? undefined : Number(select.value));
+    app.refresh();
+  });
+  return h(
+    'div.row',
+    null,
+    h('label.field', null, h('span', null, 'Your vote in the next election'), select),
+    h('span.dim', null, 'A vote for the winner gives you +1 influence per shift and peace with the leader until the next election. A vote for another candidate can keep a rival from a majority.'),
   );
 }
 
@@ -267,20 +294,21 @@ export function renderForum(app: App): HTMLElement {
     h('ul', null, [
       'One faction founds the Forum with the Forum Station project. The technology Interstellar Forum permits the project.',
       `The founder invites the other factions. An invitation costs ${INVITE_COST} influence. A faction accepts when its attitude to the founder is +${JOIN_ATTITUDE} or more and they are not at war.`,
-      'The members elect a leader each 10 shifts. Each member votes for the faction that it supports most. A faction supports itself also.',
+      'The members elect a leader each 10 shifts. You choose your vote on this screen. An AI member votes for the faction that it supports most, itself included.',
       `Support is attitude plus lobby points. A lobby action gives +${LOBBY_GAIN} support from one member until the election. Each action on the same member costs more.`,
       'You win when you get more than half of the votes of all factions. A faction outside the Forum has no vote.',
       'A member that declares war on another member leaves the Forum.',
-      'Members get +1 influence per shift. The leader gets +3.',
+      'Members get +1 influence per shift. The leader gets +3. A member that voted for the leader gets +1 more, and the leader cannot declare war on it until the next election.',
     ].map((t) => h('li', null, t))),
   );
   if (!forum) {
     const has = f.techs.includes('interstellar_forum');
-    return frame(app, 'Interstellar Forum', [
+    return frame(app, 'Species', [
+      speciesTabs(app, 'forum'),
       h('div.endtext', null, 'The Forum does not exist yet.'),
       h('div', null, has ? 'You have the technology. Build the Forum Station project on one of your planets.' : 'Research the technology Interstellar Forum. Then build the Forum Station project on one of your planets.'),
       rules,
-    ]);
+    ], { wide: true });
   }
   const founder = s.factions[forum.founder];
   const member = forum.members.includes(app.me);
@@ -327,11 +355,14 @@ export function renderForum(app: App): HTMLElement {
   const lastVotes = Object.entries(forum.lastVotes);
   return frame(
     app,
-    'Interstellar Forum',
+    'Species',
     [
+      speciesTabs(app, 'forum'),
       h('div', null, `Founder: `, h('b', { style: { color: founder.color } }, founder.name), `. Host planet: ${s.planets[forum.host].name}. Members: ${forum.members.length} of ${living.length} factions.`),
       h('div', null, `Next election: ${dateShort(forum.nextElection)} (in ${Math.max(0, forum.nextElection - s.turn)} shifts). Votes for a victory: ${need} of ${living.length}.`, forum.members.length < living.length ? ' A faction outside the Forum has no vote.' : ''),
       h('div', null, `Your influence: ${fmt(f.influence)}.`),
+      member ? voteChoice(app) : null,
+      supporter(s, app.me) ? h('div.good', null, `You voted for the leader: +1 influence per shift, and the ${s.factions[forum.leader].name} cannot declare war on you until the next election.`) : null,
       !member
         ? h(
             'div.row',

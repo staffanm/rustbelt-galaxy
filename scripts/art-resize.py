@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 # Longest side of the result, by folder.
-SIZES = {"default": 512, "scenes": 640, "ui": 1024, "icons": 128}
+SIZES = {"default": 512, "scenes": 640, "ui": 1024, "icons": 128, "widgets": 128}
 ROOT = Path(__file__).resolve().parent.parent
 PUBLIC = ROOT / "public" / "assets" / "hd"
 ORIGINALS = ROOT / "art" / "originals" / "hd"

@@ -3,6 +3,7 @@ import { TECHS } from './data/techs';
 import { unitValue } from './combat';
 import { routeYield } from './economy';
 import { emit } from './events';
+import { supporter } from './forum';
 import { distance } from './hex';
 import { expelUnits } from './movement';
 import { learn } from './research';
@@ -142,6 +143,8 @@ export function driftAttitudes(s: GameState, a: number) {
 
 export function canDeclareWar(s: GameState, a: number, b: number): boolean {
   if (a === b || !s.factions[a].met.includes(b) || !s.factions[b].alive) return false;
+  // The Forum leader keeps the peace with the members that voted for it, until the next election.
+  if (s.forum?.leader === a && supporter(s, b)) return false;
   const pr = relation(s, a, b);
   return !pr.atWar && (pr.lastChange === 0 || s.turn - pr.lastChange >= PEACE_TREATY_TURNS);
 }

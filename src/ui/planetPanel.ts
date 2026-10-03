@@ -3,6 +3,7 @@ import { BUILDINGS, PROJECTS } from '../core/data/buildings';
 import { PLANET_TYPES } from '../core/data/terrain';
 import { UNITS } from '../core/data/units';
 import {
+  MORALE_TEXT,
   addRoute,
   blockaded,
   empireIncome,
@@ -29,6 +30,7 @@ import { openLightbox } from './lightbox';
 import { planetScene, planetSceneLarge } from './scene';
 import { button, fmt, h, img, signed } from './dom';
 import { yieldRow } from './hud';
+import { closeButton, removeButton } from './widgets';
 
 function turnsFor(app: App, p: Planet, item: BuildItem, stored: number): string {
   const f = app.faction;
@@ -56,6 +58,7 @@ export function renderPlanetPanel(app: App, root: HTMLElement) {
   const f = app.faction;
   const mine = ownedPlanets(s, app.me);
   const info = planetYields(s, p);
+  const inc = empireIncome(s, f);
   const cap = popCap(s, p);
   const need = growthThreshold(p.pop);
   const growth =
@@ -72,11 +75,14 @@ export function renderPlanetPanel(app: App, root: HTMLElement) {
   const left = h(
     'div.planetleft.panel',
     null,
-    h('div.row.planethead', null, button('<', () => go(-1), { cls: 'small' }), h('div.head.grow', null, p.name), button('>', () => go(1), { cls: 'small' }), button('Close', () => app.closePlanet(), { cls: 'small' })),
+    h('div.row.planethead', null, button('<', () => go(-1), { cls: 'small' }), h('div.head.grow', null, p.name), button('>', () => go(1), { cls: 'small' }), closeButton(() => app.closePlanet(), 'Close (Esc)')),
     h('div.scene', { title: 'The colony. Every building stands within sight of the hall. Click to enlarge.', onclick: () => showScene(p, f) }, planetScene(p, f)),
     h('div.row', null, img(planetIconUrl(p.type, p.id), 40), h('div', null, h('div', null, `${PLANET_TYPES[p.type].name} planet`), h('div', null, `Population ${p.pop} of ${cap}`), h('div.dim', null, growth), h('div.dim', null, `Food ${fmt(p.food)}/${need} (${signed(info.foodSurplus, 1)})`))),
     h('div.section', null, 'Output per shift'),
     yieldRow(info.yields, 1),
+    inc.morale.level === 'Unrest' || inc.morale.level === 'Restless'
+      ? h('div.bad', { title: 'Open the budget to spend on welfare, or build morale buildings.' }, `${inc.morale.level} (${inc.morale.total}): ${MORALE_TEXT[inc.morale.level]}`)
+      : null,
     h('div.dim', null, `Building upkeep ${info.upkeep} credits`),
     h('div.section', null, 'Defence'),
     h('div', null, `Hit points ${fmt(p.hp)}/${planetMaxHp(s, p)}, strength ${fmt(planetStrength(s, p))}`),
@@ -131,10 +137,10 @@ export function renderPlanetPanel(app: App, root: HTMLElement) {
                 app.refresh();
               }, { cls: 'small' })
             : null,
-          button('x', () => {
+          removeButton(() => {
             cancelQueued(p, i);
             app.refresh();
-          }, { cls: 'small' }),
+          }, 'Remove from the queue'),
         ),
       ),
       p.queue.length ? null : h('div.bad', null, 'The queue is empty. Production becomes credits at half value.'),
@@ -159,7 +165,7 @@ function mobilePlanet(app: App, p: Planet, go: (d: number) => void, left: HTMLEl
       if (id !== 'map') app.mode = 'normal';
       app.refresh();
     }, { cls: app.planetTab === id ? 'small selected' : 'small' });
-  const head = h('div.row.planethead', null, button('Close', () => app.closePlanet(), { cls: 'small' }), button('<', () => go(-1), { cls: 'small' }), h('div.head.grow', null, p.name), button('>', () => go(1), { cls: 'small' }));
+  const head = h('div.row.planethead', null, button('<', () => go(-1), { cls: 'small' }), h('div.head.grow', null, p.name), button('>', () => go(1), { cls: 'small' }), closeButton(() => app.closePlanet()));
   const tabs = h('div.planettabs', null, tab('planet', 'Planet'), tab('production', 'Production'), tab('map', 'Map'));
   if (app.planetTab === 'map') {
     const text = app.mode === 'buyHex' ? 'Tap a yellow hex to buy it.' : 'Tap a hex inside the borders to fix or release a worker. Tap the planet to open it again.';
@@ -241,10 +247,10 @@ function routes(app: App, p: Planet): HTMLElement {
         null,
         h('span.grow', { style: { color: s.factions[to.owner]?.color } }, to.name),
         y.cred > 0 ? yieldRow({ cred: y.cred, inf: y.inf }, 1) : h('span.bad', { title: 'An enemy warship or a pirate is next to one of the two planets.' }, 'Blockaded'),
-        button('x', () => {
+        removeButton(() => {
           removeRoute(p, r);
           app.refresh();
-        }, { cls: 'small' }),
+        }, 'End the route'),
       ),
     );
   }
