@@ -1,0 +1,14 @@
+{
+  "name": "Rustbelt Galaxy",
+  "short_name": "Rustbelt",
+  "description": "A turn-based game of planets, rust, and poor decisions at faster-than-light speed.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

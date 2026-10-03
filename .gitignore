@@ -1,0 +1,13 @@
+node_modules
+dist
+*.log
+screenshots
+# Full-size originals and old art sets: large, and the game needs only public/assets/hd
+art/originals
+art/old-units
+public/assets/pixel
+public/originals
+# Scratch files
+test.png
+test-48.png
+*:Zone.Identifier
